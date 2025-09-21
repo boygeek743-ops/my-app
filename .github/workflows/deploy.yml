@@ -3,22 +3,17 @@ name: Production Deploy
 on:
   push:
     branches:
-      - main  # Trigger deploy on main branch push
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout repo
       uses: actions/checkout@v3
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '20'  # or your app's Node version
-
-    - name: Set up SSH agent
+    - name: Set up SSH
       uses: webfactory/ssh-agent@v0.7.0
       with:
         ssh-private-key: ${{ secrets.EC2_PRIVATE_KEY }}
@@ -26,30 +21,17 @@ jobs:
     - name: Deploy to EC2
       env:
         APP_DIR: /home/ubuntu/my-app
-        NODE_ENV: production
       run: |
         ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-          set -e  # Exit on first error
-
-          echo "Pulling latest code..."
+          set -e
+          if [ ! -d "$APP_DIR/.git" ]; then
+            git clone https://github.com/boygeek743-ops/my-app.git $APP_DIR
+          fi
           cd $APP_DIR
-          git reset --hard
-          git pull origin main
-
-          echo "Installing dependencies..."
+          git reset --hard origin/main
           npm install --production
-
-          echo "Setting environment variables..."
-          export NODE_ENV=production
-
-          echo "Stopping old PM2 processes..."
           pm2 stop all || true
-
-          echo "Starting new version..."
           pm2 start index.js --name "my-app"
-
-          echo "Saving PM2 process list..."
           pm2 save
-
           echo "Deployment completed successfully!"
-        EOF
+EOF
