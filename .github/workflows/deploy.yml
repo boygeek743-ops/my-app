@@ -1,37 +1,26 @@
-name: Production Deploy
+- name: Deploy to EC2
+  run: |
+    ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+      set -e
 
-on:
-  push:
-    branches:
-      - main
+      APP_DIR=/home/ubuntu/my-app
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+      # Clone if repo doesn't exist
+      if [ ! -d "$APP_DIR/.git" ]; then
+        echo "Cloning repository..."
+        git clone https://github.com/boygeek743-ops/my-app.git $APP_DIR
+      fi
 
-    steps:
-    - name: Checkout repo
-      uses: actions/checkout@v3
+      cd $APP_DIR
+      git reset --hard origin/main
 
-    - name: Set up SSH
-      uses: webfactory/ssh-agent@v0.7.0
-      with:
-        ssh-private-key: ${{ secrets.EC2_PRIVATE_KEY }}
+      echo "Installing dependencies..."
+      npm install --production
 
-    - name: Deploy to EC2
-      env:
-        APP_DIR: /home/ubuntu/my-app
-      run: |
-        ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-          set -e
-          if [ ! -d "$APP_DIR/.git" ]; then
-            git clone https://github.com/boygeek743-ops/my-app.git $APP_DIR
-          fi
-          cd $APP_DIR
-          git reset --hard origin/main
-          npm install --production
-          pm2 stop all || true
-          pm2 start index.js --name "my-app"
-          pm2 save
-          echo "Deployment completed successfully!"
+      echo "Restarting app with PM2..."
+      pm2 stop all || true
+      pm2 start index.js --name "my-app"
+      pm2 save
+
+      echo "Deployment completed successfully!"
 EOF
